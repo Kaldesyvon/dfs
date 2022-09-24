@@ -1,0 +1,47 @@
+<project name="dfs-2020" basedir="." default="help">
+	
+	<property name="product" value="dfs"/>
+
+	<property name="src.dir" value="src"/>
+	<property name="lib.dir" value="lib"/>
+	<property name="build.dir" value="bin"/>
+
+	<path id="libs">
+		<fileset dir="${lib.dir}" includes="**/*.jar"/>
+	</path>
+	
+	<target name="help">
+		<echo>
+============================================================
+Distributed File System
+ 
+Project: dfs-2022
+Course:  Distributed Systems (fall 2022/2023)
+School:  Department of Computers and Informatics
+         Faculty of Electrical Engineering and Informatics
+         Technical University of Kosice
+============================================================
+ 
+Command     Description
+------------------------------------------------------------
+ant clean - Clean the project
+ant build - Create full build of the project
+		</echo>
+	</target>
+	
+	<target name="clean">
+		<delete dir="${build.dir}"/>
+	</target>
+
+	<target name="build">
+		<mkdir dir="${build.dir}"/>
+		<javac includeantruntime="false" srcdir="${src.dir}" destdir="${build.dir}" classpathref="libs"/>
+		<delete file="${build.dir}/${product}.jar"/>
+		<jar destfile="${build.dir}/${product}.jar" basedir="${build.dir}" includes="**/*.*">
+			<manifest>
+				<attribute name="Product" value="${product}"/>
+			</manifest>
+		</jar>
+	</target>
+
+</project>
