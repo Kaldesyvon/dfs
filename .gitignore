@@ -1,2 +1,5 @@
 bin
 extentroot
+.idea
+.gitignore
+.gitattributes
