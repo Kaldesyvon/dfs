@@ -1,14 +1,13 @@
-package src.dfs.dfsservice;
+package dfs.dfsservice;
 
-import src.dfs.extentsevice.ExtentConnector;
-import src.dfs.lockservice.LockConnector;
+import dfs.extentservice.ExtentConnector;
+import dfs.lockservice.LockConnector;
 
 import java.rmi.RemoteException;
 import java.util.List;
 
-public class DFSServer implements DFSConnector {
-
-    public DFSServer(int port, ExtentConnector extentServer, LockConnector lockServer) throws RemoteException {
+public class DFSServer implements DFSConnector{
+    public DFSServer(int port, ExtentConnector extentServer, LockConnector lockServer) {
 
     }
 

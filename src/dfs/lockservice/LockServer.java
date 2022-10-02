@@ -1,11 +1,14 @@
-package src.dfs.lockservice;
+package dfs.lockservice;
 
-import javax.management.remote.rmi.RMIServer;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 
 public class LockServer implements LockConnector {
-    public LockServer(int port) throws RemoteException {
+    private Registry registry;
 
+    public LockServer(int port) throws RemoteException {
+        registry = LocateRegistry.createRegistry(port);
     }
 
     @Override

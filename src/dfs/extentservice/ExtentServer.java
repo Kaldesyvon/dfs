@@ -1,9 +1,12 @@
-package src.dfs.extentsevice;
+package dfs.extentservice;
 
 import java.rmi.RemoteException;
 
 public class ExtentServer implements ExtentConnector{
-    public ExtentServer(int port, String path) throws RemoteException {}
+
+    public ExtentServer(int port, String path) {
+
+    }
 
     @Override
     public byte[] get(String fileName) throws RemoteException {

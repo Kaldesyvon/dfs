@@ -1,4 +1,4 @@
-package src.dfs.extentsevice;
+package dfs.extentservice;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;

@@ -1,4 +1,4 @@
-package src.dfs.lockservice;
+package dfs.lockservice;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;

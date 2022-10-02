@@ -1,4 +1,4 @@
-package src.dfs.dfsservice;
+package dfs.dfsservice;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
