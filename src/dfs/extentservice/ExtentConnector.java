@@ -11,4 +11,5 @@ public interface ExtentConnector extends Remote {
     boolean put(String fileName, byte[] fileData) throws RemoteException, IOException;
 
     void stop() throws RemoteException, NotBoundException;
+
 }

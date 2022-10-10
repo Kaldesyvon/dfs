@@ -11,8 +11,8 @@ import java.util.List;
 
 public class LockServer implements LockConnector, Serializable {
     private static final String SERVICE_NAME = "LockService";
-    private Registry registry;
-    private List<String> locksIds = new ArrayList<>();
+    private final Registry registry;
+    private final List<String> locksIds = new ArrayList<>();
 
     public LockServer(int port) throws RemoteException, AlreadyBoundException {
         registry = LocateRegistry.createRegistry(port);
@@ -28,6 +28,7 @@ public class LockServer implements LockConnector, Serializable {
 
     @Override
     public void release(String lockId, String ownerId) throws RemoteException {
+//        locksIDs.remove(lockId);
         locksIds.clear();
     }
 
