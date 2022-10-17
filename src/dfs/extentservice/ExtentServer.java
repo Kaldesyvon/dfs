@@ -15,7 +15,7 @@ import java.util.Objects;
 public class ExtentServer implements ExtentConnector, Serializable {
 
     private final String path;
-    private static final String SERVICE_NAME = "ExtentService";
+
     private final Registry registry;
 
     public ExtentServer(int port, String path) throws RemoteException, AlreadyBoundException {

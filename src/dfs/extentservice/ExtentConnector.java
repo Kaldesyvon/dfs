@@ -6,6 +6,8 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 public interface ExtentConnector extends Remote {
+    String SERVICE_NAME = "ExtentService";
+
     byte[] get(String fileName) throws RemoteException, IOException;
 
     boolean put(String fileName, byte[] fileData) throws RemoteException, IOException;

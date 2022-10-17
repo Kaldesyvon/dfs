@@ -14,12 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DFSServer implements DFSConnector, Serializable {
-
-    private static final String OWNER_ID = "user";
-    private static final String SERVICE_NAME = "DFSService";
+    public final String OWNER_ID = this.toString();
     private final Registry registry;
     private final ExtentConnector extentServer;
     private final LockConnector lockServer;
+
+    private LockStatus lockStatus = LockStatus.NONE;
 
 
     public DFSServer(int port, ExtentConnector extentServer, LockConnector lockServer) throws RemoteException, AlreadyBoundException {
@@ -28,8 +28,6 @@ public class DFSServer implements DFSConnector, Serializable {
 
         this.extentServer = extentServer;
         this.lockServer = lockServer;
-
-
     }
 
     @Override

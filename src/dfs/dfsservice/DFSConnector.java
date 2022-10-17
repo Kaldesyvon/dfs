@@ -7,6 +7,7 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 public interface DFSConnector extends Remote {
+    String SERVICE_NAME = "DFSService";
 
     List<String> dir(String directoryName) throws RemoteException, IOException;
 
