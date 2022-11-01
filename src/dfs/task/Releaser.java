@@ -4,6 +4,7 @@ import dfs.lockservice.LockConnector;
 import dfs.lockservice.Pair;
 
 import java.io.Serializable;
+import java.io.StringReader;
 import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -16,45 +17,39 @@ public class Releaser extends AbstractTask implements Serializable {
     private final String ownerId;
     private List<String> locks;
     private List<String> toBeReleased;
+    private List<String> freeLocks;
     private LockConnector lockServer;
 
-    public Releaser(List<String> locks, List<String> toBeReleased, Object lock, LockConnector lockServer, String ownerId){
+    public Releaser(List<String> locks, List<String> toBeReleased, Object lock, LockConnector lockServer, String ownerId, List<String> freeLocks) {
         this.locks = locks;
         this.toBeReleased = toBeReleased;
         this.lock = lock;
         this.ownerId = ownerId;
         this.lockServer = lockServer;
-    }
-
-    @Override
-    public void start() {
-        System.out.println("Releaser started");
-        super.start();
-    }
-
-    @Override
-    public void stop() {
-        System.out.println("Releaser stopped");
-        super.stop();
+        this.freeLocks = freeLocks;
     }
 
     @Override
     public synchronized void run() {
         System.out.println("Releasing...");
         try {
-            for (var releasing : toBeReleased) {
-                try {
-                    var release = releasing;
-                    toBeReleased.remove(releasing);
-                    lockServer.release(release, ownerId);
-                } catch (RemoteException e) {
-                    throw new RuntimeException(e);
+            while (isRunning()) {
+                synchronized (lock) {
+                    for (int i = 0; i < toBeReleased.size(); i++) {
+                        String lock = toBeReleased.get(i);
+                        if (freeLocks.contains(lock)) {
+
+                            freeLocks.remove(lock);
+                            toBeReleased.remove(lock);
+                            i--;
+                            lockServer.release(lock, ownerId);
+
+                        }
+                    }
+                    lock.wait();
                 }
-
             }
-
-            lock.wait();
-        } catch (InterruptedException e) {
+        } catch (RemoteException | InterruptedException e) {
             throw new RuntimeException(e);
         }
     }

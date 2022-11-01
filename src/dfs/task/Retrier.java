@@ -48,7 +48,7 @@ public class Retrier extends AbstractTask implements Serializable {
                             owner[0],
                             Integer.parseInt(owner[1]));
 
-                    LockCacheConnector lcc = (LockCacheConnector) registry.lookup("LockCacheService");
+                    var lcc = (LockCacheConnector) registry.lookup(LockCacheConnector.SERVICE_NAME);
                     lcc.retry(lockId, locks.get(lockId).getSequence());
                 }
                 catch (RemoteException | NotBoundException e) {

@@ -27,9 +27,9 @@ public class DFSServer implements DFSConnector, Serializable {
         registry = LocateRegistry.createRegistry(port);
         var dfsServer = (DFSConnector) UnicastRemoteObject.exportObject(this, port);
 
-        registry.bind(SERVICE_NAME, dfsServer);
+        registry.bind("DFSService", dfsServer);
 
-        this.lockCacheService = new LockCacheService(port, extentServer, lockServer);
+        this.lockCacheService = new LockCacheServer(port, extentServer, lockServer);
         this.extentServer = extentServer;
         this.lockServer = lockServer;
         System.out.println("DFS Server ready");
@@ -97,6 +97,8 @@ public class DFSServer implements DFSConnector, Serializable {
     public void stop() throws NotBoundException, RemoteException {
         lockServer.stop();
         extentServer.stop();
-        registry.unbind(SERVICE_NAME);
+        lockCacheService.stop();
+        registry.unbind("DFSService");
+        UnicastRemoteObject.unexportObject(this, true);
     }
 }

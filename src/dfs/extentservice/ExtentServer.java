@@ -10,6 +10,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.Objects;
 
 public class ExtentServer implements ExtentConnector, Serializable {
@@ -20,8 +21,10 @@ public class ExtentServer implements ExtentConnector, Serializable {
 
     public ExtentServer(int port, String path) throws RemoteException, AlreadyBoundException {
         registry = LocateRegistry.createRegistry(port);
+        var stub = (ExtentConnector) UnicastRemoteObject.exportObject(this, port);
+        this.registry.bind(ExtentConnector.SERVICE_NAME, stub);
+
         this.path = path;
-        registry.bind(SERVICE_NAME, this);
 
         System.out.println("Extent Server is running");
     }
@@ -67,6 +70,7 @@ public class ExtentServer implements ExtentConnector, Serializable {
     @Override
     public void stop() throws RemoteException, NotBoundException {
         registry.unbind(SERVICE_NAME);
+        UnicastRemoteObject.unexportObject(this, true);
     }
 
     public Path getPath(String fileName) {
