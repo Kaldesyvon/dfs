@@ -9,17 +9,17 @@ import java.util.List;
 public interface DFSConnector extends Remote {
     String SERVICE_NAME = "DFSService";
 
-    List<String> dir(String directoryName) throws RemoteException, IOException;
+    List<String> dir(String directoryName) throws RemoteException, IOException, InterruptedException, NotBoundException;
 
-    boolean mkdir(String directoryName) throws RemoteException, IOException;
+    boolean mkdir(String directoryName) throws RemoteException, IOException, InterruptedException, NotBoundException;
 
-    boolean rmdir(String directoryName) throws RemoteException, IOException;
+    boolean rmdir(String directoryName) throws RemoteException, IOException, InterruptedException, NotBoundException;
 
-    byte[] get(String fileName) throws RemoteException, IOException;
+    byte[] get(String fileName) throws RemoteException, IOException, InterruptedException, NotBoundException;
 
-    boolean put(String fileName, byte[] fileData) throws RemoteException, IOException;
+    boolean put(String fileName, byte[] fileData) throws RemoteException, IOException, InterruptedException, NotBoundException;
 
-    boolean delete(String fileName) throws RemoteException, IOException;
+    boolean delete(String fileName) throws RemoteException, IOException, InterruptedException, NotBoundException;
 
     void stop() throws RemoteException, NotBoundException;
 }

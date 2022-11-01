@@ -23,6 +23,7 @@ public class ExtentServer implements ExtentConnector, Serializable {
         this.path = path;
         registry.bind(SERVICE_NAME, this);
 
+        System.out.println("Extent Server is running");
     }
 
     @Override

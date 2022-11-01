@@ -1,5 +1,9 @@
 package dfs.task;
 
+import java.io.Serializable;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+
 public abstract class AbstractTask implements Task {
     private Thread thread;
     private boolean isRunning = false;
@@ -23,9 +27,5 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public void run() {
-        while(isRunning()) {
-            System.out.println("Running");
-        }
-    }
+    public abstract void run();
 }

@@ -1,6 +1,8 @@
 package dfs.task;
 
-public interface Task extends Runnable{
+import java.io.Serializable;
+
+public interface Task extends Runnable {
     void start();
     void stop();
     boolean isRunning();
