@@ -3,70 +3,71 @@ package dfs.lockservice;
 import dfs.task.Retrier;
 import dfs.task.Revoker;
 
-import java.io.Serializable;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.*;
 
+public class LockServer implements dfs.lockservice.LockConnector {
 
-
-public class LockServer implements LockConnector, Serializable {
-    private final Registry registry;
-    private HashMap<String, Pair> locks = new HashMap<String, Pair>();
-    private Queue<String> toBeRevoked = new LinkedList<String>();
-    private Queue<String> toBeReleased = new LinkedList<String>();
-    private Queue<String> toBeRetried = new LinkedList<String>();
+    private Registry registry;
+    private final HashMap<String, Pair> lockMap = new HashMap<>();
     private final Revoker revoker;
     private final Retrier retrier;
-
-
-    private String ownerId = null;
+    private final Queue<String> toBeRevoked = new LinkedList<>();
+    private final HashMap<String, Queue<Pair>> revokedLocks = new HashMap<>();
 
     public LockServer(int port) throws RemoteException, AlreadyBoundException {
-        registry = LocateRegistry.createRegistry(port);
-        var lockServer = (LockConnector) UnicastRemoteObject.exportObject(this, port);
-        registry.bind(LockConnector.SERVICE_NAME, lockServer);
+        this.registry = LocateRegistry.createRegistry(port);
+        LockConnector lockServer = (LockConnector) UnicastRemoteObject.exportObject(this, port);
+        this.registry.bind("LockService", lockServer);
 
-        this.retrier = new Retrier(locks, toBeRetried, lockServer);
-        this.revoker = new Revoker(locks, toBeRetried, toBeRevoked, this);
+        Queue<String> toBeRetriedQueue = new LinkedList<>();
+        this.revoker = new Revoker(lockMap, toBeRevoked,
+                toBeRetriedQueue, this);
+        this.retrier = new Retrier(revokedLocks,
+                toBeRetriedQueue, this);
 
-        System.out.println("LockServer lock and loaded");
+        System.out.println("LockServer is running");
     }
 
     @Override
     public boolean acquire(String lockId, String ownerId, long sequence) throws RemoteException {
-        synchronized (this){
-            System.out.printf("%s is acquiring with lockID %s %n", ownerId, lockId);
-
-            if (!locks.containsKey(lockId)) {
-                locks.put(lockId, new Pair(ownerId, sequence));
-                notify();
+        synchronized (this) {
+            if (!this.lockMap.containsKey(lockId)) {
+                this.lockMap.put(lockId, new Pair(ownerId, sequence));
                 return true;
             } else {
                 if (!toBeRevoked.contains(lockId))
                     toBeRevoked.add(lockId);
 
-                revoker.start();
 
+                Pair unsuccessful = new Pair(ownerId, sequence);
+
+                if (revokedLocks.containsKey(lockId)) {
+                    revokedLocks.get(lockId).add(unsuccessful);
+                } else {
+                    revokedLocks.put(lockId, new LinkedList<>());
+                    revokedLocks.get(lockId).add(unsuccessful);
+                }
+
+                revoker.start();
                 this.notifyAll();
+
                 return false;
             }
         }
     }
 
-
     @Override
     public void release(String lockId, String ownerId) throws RemoteException {
-        System.out.printf("%s is releasing with lockID %s %n", ownerId, lockId);
         synchronized (this) {
-            if (locks.get(lockId) != null && locks.get(lockId).equals(ownerId)) {
-                locks.remove(lockId);
+            var lock = lockMap.get(lockId);
+            if (ownerId.equals(lock.getOwnerId())) {
+                lockMap.remove(lockId);
                 retrier.start();
 
                 this.notifyAll();
@@ -74,12 +75,14 @@ public class LockServer implements LockConnector, Serializable {
         }
     }
 
+
     @Override
     public void stop() throws RemoteException, NotBoundException {
-        locks.clear();
-        registry.unbind(LockConnector.SERVICE_NAME);
+        revoker.stop();
+        retrier.stop();
+        this.notifyAll();
+
+        registry.unbind("LockService");
         UnicastRemoteObject.unexportObject(this, true);
     }
-
-
 }

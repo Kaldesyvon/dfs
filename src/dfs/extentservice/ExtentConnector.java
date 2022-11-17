@@ -8,9 +8,9 @@ import java.rmi.RemoteException;
 public interface ExtentConnector extends Remote {
     String SERVICE_NAME = "ExtentService";
 
-    byte[] get(String fileName) throws RemoteException, IOException;
+    byte[] get(String fileName) throws IOException;
 
-    boolean put(String fileName, byte[] fileData) throws RemoteException, IOException;
+    boolean put(String fileName, byte[] fileData) throws IOException;
 
     void stop() throws RemoteException, NotBoundException;
 

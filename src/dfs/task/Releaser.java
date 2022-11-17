@@ -1,56 +1,45 @@
 package dfs.task;
 
 import dfs.lockservice.LockConnector;
-import dfs.lockservice.Pair;
 
-import java.io.Serializable;
-import java.io.StringReader;
 import java.rmi.RemoteException;
-import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 
-public class Releaser extends AbstractTask implements Serializable {
+public class Releaser extends AbstractTask {
 
-    private final Object lock;
+    private final List<String> freeList;
+    private final List<String> toBeReleasedList;
+    private final LockConnector lockServer;
     private final String ownerId;
-    private List<String> locks;
-    private List<String> toBeReleased;
-    private List<String> freeLocks;
-    private LockConnector lockServer;
+    private final Object lock;
 
-    public Releaser(List<String> locks, List<String> toBeReleased, Object lock, LockConnector lockServer, String ownerId, List<String> freeLocks) {
-        this.locks = locks;
-        this.toBeReleased = toBeReleased;
-        this.lock = lock;
-        this.ownerId = ownerId;
+    public Releaser(List<String> toBeReleasedList, List<String> freeList,
+                    String ownerId, LockConnector lockServer, final Object lock) {
+        this.toBeReleasedList = toBeReleasedList;
+        this.freeList = freeList;
         this.lockServer = lockServer;
-        this.freeLocks = freeLocks;
+        this.ownerId = ownerId;
+        this.lock = lock;
     }
 
     @Override
-    public synchronized void run() {
-        System.out.println("Releasing...");
-        try {
-            while (isRunning()) {
+    public void run() {
+        System.out.println("Releasing");
+        try{
+            while (this.isRunning()) {
                 synchronized (lock) {
-                    for (int i = 0; i < toBeReleased.size(); i++) {
-                        String lock = toBeReleased.get(i);
-                        if (freeLocks.contains(lock)) {
-
-                            freeLocks.remove(lock);
-                            toBeReleased.remove(lock);
-                            i--;
+                    for (var lock: toBeReleasedList) {
+                        if (freeList.contains(lock)) {
+                            freeList.remove(lock);
+                            toBeReleasedList.remove(lock);
                             lockServer.release(lock, ownerId);
-
                         }
                     }
                     lock.wait();
                 }
             }
-        } catch (RemoteException | InterruptedException e) {
-            throw new RuntimeException(e);
+        } catch (RemoteException | InterruptedException e){
+            e.printStackTrace();
         }
     }
 }

@@ -22,7 +22,7 @@ public class ExtentServer implements ExtentConnector, Serializable {
     public ExtentServer(int port, String path) throws RemoteException, AlreadyBoundException {
         registry = LocateRegistry.createRegistry(port);
         var stub = (ExtentConnector) UnicastRemoteObject.exportObject(this, port);
-        this.registry.bind(ExtentConnector.SERVICE_NAME, stub);
+        this.registry.bind("ExtentService", stub);
 
         this.path = path;
 
@@ -69,7 +69,7 @@ public class ExtentServer implements ExtentConnector, Serializable {
 
     @Override
     public void stop() throws RemoteException, NotBoundException {
-        registry.unbind(SERVICE_NAME);
+        registry.unbind("ExtentService");
         UnicastRemoteObject.unexportObject(this, true);
     }
 

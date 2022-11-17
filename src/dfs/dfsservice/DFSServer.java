@@ -32,13 +32,12 @@ public class DFSServer implements DFSConnector, Serializable {
         this.lockCacheService = new LockCacheServer(port, extentServer, lockServer);
         this.extentServer = extentServer;
         this.lockServer = lockServer;
-        System.out.println("DFS Server ready");
+        System.out.println("DFS Server is running");
     }
 
     @Override
     public List<String> dir(String directoryName) throws RemoteException, InterruptedException, NotBoundException {
         lockCacheService.acquire(directoryName);
-
         try {
             var dirs = extentServer.get(directoryName);
             var res = new String(dirs).replace("\\", "/");

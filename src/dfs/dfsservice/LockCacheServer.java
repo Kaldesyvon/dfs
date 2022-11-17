@@ -5,80 +5,77 @@ import dfs.lockservice.LockConnector;
 import dfs.task.Releaser;
 
 import java.io.IOException;
-import java.io.Serializable;
-import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.rmi.AlreadyBoundException;
-import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
+import java.nio.charset.StandardCharsets;
+import java.rmi.*;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
-public class LockCacheServer implements LockCache, LockCacheConnector, Serializable {
-    private final int port;
+public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConnector {
+
     private final Registry registry;
-
-    private final ExtentConnector extentServer;
-    private final LockConnector lockServer;
-
-    private List<String> locks = new ArrayList<>();
-    private List<String> toBeReleased = new ArrayList<>();
-    private List<String> freeLocks = new ArrayList<>();
-    private List<String> lockedLocks = new ArrayList<>();
-
     private final String address;
-    private long sequence = 0;
+    private final LockConnector lockServer;
+    private final Releaser releaser;
+    private final List<String> lockedList = new ArrayList<>();
+    private final List<String> toBeAcquired = new ArrayList<>();
+    private final List<String> toBeReleased = new ArrayList<>();
+    private final List<String> freeLocks = new ArrayList<>();
+    private long acquire = 0;
 
-    private Releaser releaser;
+    LockCacheServer(int port, ExtentConnector extentServer, LockConnector lockServer) throws IOException, AlreadyBoundException {
 
 
+        this.registry = LocateRegistry.getRegistry(port);
+        var socket = new Socket("google.com", 80);
+        var ip = socket.getLocalAddress().getHostAddress();
+        socket.close();
+        this.address = this.generateFullAddress(ip, port);
 
-    public LockCacheServer(int port, ExtentConnector extentServer, LockConnector lockServer) throws IOException, AlreadyBoundException {
-        this.port = port;
-        this.extentServer = extentServer;
+        var lockCacheService = (LockCacheConnector) UnicastRemoteObject.exportObject(this, port);
+        this.registry.bind("LockCacheService", lockCacheService);
+
         this.lockServer = lockServer;
 
-        registry = LocateRegistry.getRegistry(port);
-        LockCacheConnector stub = (LockCacheConnector) UnicastRemoteObject.exportObject(this, port);
-        registry.bind("LockCacheService", stub);
+        this.releaser = new Releaser(toBeReleased, freeLocks,
+                address, lockServer, this);
 
-        Socket socket = new Socket();
-        socket.connect(new InetSocketAddress("google.com", 80));
-        address = String.valueOf(socket.getLocalAddress());
-        socket.close();
-
-        releaser = new Releaser(locks, toBeReleased, this, lockServer, getOwnerId(address, port), freeLocks);
-
-
-//        System.out.println("Lcc is running on: " + LocateRegistry.getRegistry(ownerId[0], Integer.parseInt(ownerId[1])).lookup(LockCacheServer.SERVICE_NAME));
-        System.out.println("Lcc is running on port: " + port);
+        System.out.println("LockCacheServer is running");
     }
 
+
     @Override
-    public void acquire(String lockId) throws RemoteException, InterruptedException, NotBoundException {
-        System.out.printf("%s is trying to acquire lock %s%n", getOwnerId(address, port), lockId);
+    public void acquire(String lockId) throws NotBoundException, RemoteException, InterruptedException {
         synchronized (this) {
-            while (!lockedLocks.contains(lockId)
-                    && !freeLocks.contains(lockId)
-                    && (locks.contains(lockId) || !lockServer.acquire(lockId, address, sequence++))) {
-                locks.add(lockId);
+            System.out.println("acquiring with lockId: " + lockId);
+            while ((toBeAcquired.contains(lockId)
+                    && (!lockedList.contains(lockId) && !freeLocks.contains(lockId))
+                    || !lockServer.acquire(lockId, address, acquire++))) {
 
-                if (!locks.contains(lockId)){
-                    locks.add(lockId);
-                }
+                if (!toBeAcquired.contains(lockId))
+                    toBeAcquired.add(lockId);
 
-                lockServer.acquire(lockId, getOwnerId(address, port), sequence++);
-                wait();
+                this.wait();
             }
-
-            lockedLocks.add(lockId);
-            locks.remove(lockId);
+            lockedList.add(lockId);
+            toBeAcquired.remove(lockId);
             freeLocks.remove(lockId);
+        }
+    }
 
+
+
+    @Override
+    public void release(String lockId) {
+        synchronized (this) {
+            System.out.println("releasing with lockId: " + lockId);
+            if (lockedList.contains(lockId)){
+                lockedList.remove(lockId);
+                freeLocks.add(lockId);
+                this.notifyAll();
+            }
         }
     }
 
@@ -88,48 +85,40 @@ public class LockCacheServer implements LockCache, LockCacheConnector, Serializa
     }
 
     @Override
-    public synchronized void release(String lockId) {
-        System.out.println("client got released" + lockId);
+    public synchronized void revoke(String lockId) throws RemoteException {
         synchronized (this) {
-            if (lockedLocks.contains(lockId)) {
-                freeLocks.add(lockId);
-                lockedLocks.remove(lockId);
-                this.notifyAll();
+            System.out.println("revoking with lockId: " + lockId);
+            if (!toBeReleased.contains(lockId)) {
+                toBeReleased.add(lockId);
             }
+            releaser.start();
+            this.notifyAll();
         }
+
+    }
+
+    @Override
+    public void retry(String lockId, long sequence) throws RemoteException {
+        synchronized (this){
+            System.out.println("retrying with lockId: " + lockId);
+            toBeAcquired.remove(lockId);
+            this.notifyAll();
+        }
+    }
+
+    private String generateFullAddress(String ip, int port) {
+        byte[] array = new byte[7];
+        new Random().nextBytes(array);
+        String generatedRandomString = new String(array, StandardCharsets.UTF_8);
+        return ip + ":" + port + ":" + generatedRandomString;
     }
 
     @Override
     public void stop() throws NotBoundException, RemoteException {
         releaser.stop();
         this.notifyAll();
-        registry.unbind(SERVICE_NAME);
+
+        registry.unbind("LockCacheService");
         UnicastRemoteObject.unexportObject(this, true);
-    }
-
-    @Override
-    public void retry(String lockId, long sequence) throws RemoteException {
-        synchronized (this){
-            locks.remove(lockId);
-            this.notifyAll();
-        }
-    }
-
-    @Override
-    public void revoke(String lockId) throws RemoteException {
-        synchronized (this) {
-            System.out.println("client got revoked " + lockId);
-            if (!toBeReleased.contains(lockId))
-                toBeReleased.add(lockId);
-            releaser.start();
-            this.notifyAll();
-        }
-
-
-    }
-
-    private String getOwnerId(String ip, int port){
-        String uuid = UUID.randomUUID().toString();
-        return ip + ":" + port + ":" + uuid;
     }
 }
