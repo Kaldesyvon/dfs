@@ -25,7 +25,7 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     private final List<String> freeLocks = new ArrayList<>();
     private long acquire = 0;
 
-    LockCacheServer(int port, ExtentConnector extentServer, LockConnector lockServer) throws IOException, AlreadyBoundException {
+    LockCacheServer(int port, ExtentCache extentCache, LockConnector lockServer) throws IOException, AlreadyBoundException {
 
 
         this.registry = LocateRegistry.getRegistry(port);
@@ -39,7 +39,7 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
 
         this.lockServer = lockServer;
 
-        this.releaser = new Releaser(toBeReleased, freeLocks,
+        this.releaser = new Releaser(extentCache, toBeReleased, freeLocks,
                 address, lockServer, this);
 
         System.out.println("LockCacheServer is running");
@@ -49,7 +49,6 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     @Override
     public void acquire(String lockId) throws NotBoundException, RemoteException, InterruptedException {
         synchronized (this) {
-            System.out.println("acquiring with lockId: " + lockId);
             while ((toBeAcquired.contains(lockId)
                     && (!lockedList.contains(lockId) && !freeLocks.contains(lockId))
                     || !lockServer.acquire(lockId, address, acquire++))) {
@@ -70,7 +69,6 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     @Override
     public void release(String lockId) {
         synchronized (this) {
-            System.out.println("releasing with lockId: " + lockId);
             if (lockedList.contains(lockId)){
                 lockedList.remove(lockId);
                 freeLocks.add(lockId);
@@ -87,7 +85,6 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     @Override
     public synchronized void revoke(String lockId) throws RemoteException {
         synchronized (this) {
-            System.out.println("revoking with lockId: " + lockId);
             if (!toBeReleased.contains(lockId)) {
                 toBeReleased.add(lockId);
             }
@@ -100,7 +97,6 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     @Override
     public void retry(String lockId, long sequence) throws RemoteException {
         synchronized (this){
-            System.out.println("retrying with lockId: " + lockId);
             toBeAcquired.remove(lockId);
             this.notifyAll();
         }

@@ -12,15 +12,15 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class DFSServer implements DFSConnector, Serializable {
     private final LockCache lockCacheService;
     public final String OWNER_ID = this.toString();
     private final Registry registry;
-    private final ExtentConnector extentServer;
     private final LockConnector lockServer;
-
+    private final ExtentCache extentCacheServer;
 
 
     public DFSServer(int port, ExtentConnector extentServer, LockConnector lockServer) throws IOException, AlreadyBoundException {
@@ -28,18 +28,19 @@ public class DFSServer implements DFSConnector, Serializable {
         var dfsServer = (DFSConnector) UnicastRemoteObject.exportObject(this, port);
 
         registry.bind("DFSService", dfsServer);
-
-        this.lockCacheService = new LockCacheServer(port, extentServer, lockServer);
-        this.extentServer = extentServer;
+        this.extentCacheServer = new ExtentCacheServer(port, extentServer);
+        this.lockCacheService = new LockCacheServer(port, extentCacheServer, lockServer);
         this.lockServer = lockServer;
         System.out.println("DFS Server is running");
     }
 
     @Override
-    public List<String> dir(String directoryName) throws RemoteException, InterruptedException, NotBoundException {
+    public synchronized List<String> dir(String directoryName) throws IOException, InterruptedException, NotBoundException {
+        System.out.println("client dir " +  directoryName);
         lockCacheService.acquire(directoryName);
         try {
-            var dirs = extentServer.get(directoryName);
+            var dirs = extentCacheServer.get(directoryName);
+            extentCacheServer.update(directoryName);
             var res = new String(dirs).replace("\\", "/");
             List<String> result = new ArrayList<>();
             result.add(res.substring(res.lastIndexOf("/") + 1));
@@ -53,50 +54,58 @@ public class DFSServer implements DFSConnector, Serializable {
     }
 
     @Override
-    public boolean mkdir(String directoryName) throws IOException, InterruptedException, NotBoundException {
+    public synchronized boolean mkdir(String directoryName) throws IOException, InterruptedException, NotBoundException {
+        System.out.println("client mkdir " +  directoryName);
         lockCacheService.acquire(directoryName);
-        var res = extentServer.put(directoryName, "hello".getBytes());
+        var res = extentCacheServer.put(directoryName, "hello".getBytes());
+        extentCacheServer.update(directoryName);
         lockServer.release(directoryName, OWNER_ID);
         return res;
     }
 
     @Override
-    public boolean rmdir(String directoryName) throws IOException, InterruptedException, NotBoundException {
+    public synchronized boolean rmdir(String directoryName) throws IOException, InterruptedException, NotBoundException {
+        System.out.println("client rmdir " +  directoryName);
         lockCacheService.acquire(directoryName);
-        var res = extentServer.put(directoryName, null);
+        var res = extentCacheServer.put(directoryName, null);
+        extentCacheServer.update(directoryName);
         lockCacheService.release(directoryName);
         return res;
     }
 
     @Override
-    public byte[] get(String fileName) throws IOException, InterruptedException, NotBoundException {
+    public synchronized byte[] get(String fileName) throws IOException, InterruptedException, NotBoundException {
+        System.out.println("client get " +  fileName);
+        if (fileName.endsWith("/")) return null;
         lockCacheService.acquire(fileName);
-        var res = extentServer.get(fileName);
+        var res = extentCacheServer.get(fileName);
+        extentCacheServer.update(fileName);
         lockCacheService.release(fileName);
         return res;
     }
 
     @Override
-    public boolean put(String fileName, byte[] fileData) throws IOException, InterruptedException, NotBoundException {
+    public synchronized boolean put(String fileName, byte[] fileData) throws IOException, InterruptedException, NotBoundException {
+        System.out.println("client put " +  fileName);
         lockCacheService.acquire(fileName);
-        var res = extentServer.put(fileName, fileData);
+        var res = extentCacheServer.put(fileName, fileData);
+        extentCacheServer.update(fileName);
         lockCacheService.release(fileName);
         return res;
     }
 
     @Override
-    public boolean delete(String fileName) throws IOException, InterruptedException, NotBoundException {
+    public synchronized boolean delete(String fileName) throws IOException, InterruptedException, NotBoundException {
+        System.out.println("deleting " +  fileName);
         lockCacheService.acquire(fileName);
-        var res = extentServer.put(fileName, null);
+        var res = extentCacheServer.put(fileName, null);
+        extentCacheServer.update(fileName);
         lockCacheService.release(fileName);
         return res;
     }
 
     @Override
     public void stop() throws NotBoundException, RemoteException {
-        lockServer.stop();
-        extentServer.stop();
-        lockCacheService.stop();
         registry.unbind("DFSService");
         UnicastRemoteObject.unexportObject(this, true);
     }

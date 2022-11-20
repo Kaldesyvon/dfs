@@ -1,8 +1,10 @@
 package dfs.task;
 
+import dfs.dfsservice.ExtentCache;
 import dfs.lockservice.LockConnector;
 
 import java.rmi.RemoteException;
+import java.util.Iterator;
 import java.util.List;
 
 public class Releaser extends AbstractTask {
@@ -12,29 +14,36 @@ public class Releaser extends AbstractTask {
     private final LockConnector lockServer;
     private final String ownerId;
     private final Object lock;
+    private final ExtentCache extentCache;
 
-    public Releaser(List<String> toBeReleasedList, List<String> freeList,
+    public Releaser(ExtentCache extentCache, List<String> toBeReleasedList, List<String> freeList,
                     String ownerId, LockConnector lockServer, final Object lock) {
         this.toBeReleasedList = toBeReleasedList;
         this.freeList = freeList;
         this.lockServer = lockServer;
         this.ownerId = ownerId;
         this.lock = lock;
+        this.extentCache = extentCache;
     }
 
     @Override
+    @SuppressWarnings({"en", "ForLoopReplaceableByForEach"})
     public void run() {
-        System.out.println("Releasing");
         try{
             while (this.isRunning()) {
                 synchronized (lock) {
-                    for (var lock: toBeReleasedList) {
+                    for( int i = 0; i < toBeReleasedList.size(); i++ )
+                    {
+                        String lock = toBeReleasedList.get( i );
                         if (freeList.contains(lock)) {
                             freeList.remove(lock);
+                            extentCache.flush(lock);
                             toBeReleasedList.remove(lock);
                             lockServer.release(lock, ownerId);
+                            i--;
                         }
                     }
+
                     lock.wait();
                 }
             }

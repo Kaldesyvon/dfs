@@ -29,6 +29,7 @@ public class ExtentServer implements ExtentConnector, Serializable {
         System.out.println("Extent Server is running");
     }
 
+    @SuppressWarnings("resource")
     @Override
     public byte[] get(String fileName) throws IOException {
         if (fileName.endsWith("/") || fileName.endsWith("\\")) {
