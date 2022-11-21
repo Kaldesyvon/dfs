@@ -1,11 +1,10 @@
 package dfs.task;
 
+import java.rmi.RemoteException;
+import java.util.List;
+
 import dfs.dfsservice.ExtentCache;
 import dfs.lockservice.LockConnector;
-
-import java.rmi.RemoteException;
-import java.util.Iterator;
-import java.util.List;
 
 public class Releaser extends AbstractTask {
 
@@ -16,8 +15,8 @@ public class Releaser extends AbstractTask {
     private final Object lock;
     private final ExtentCache extentCache;
 
-    public Releaser(ExtentCache extentCache, List<String> toBeReleasedList, List<String> freeList,
-                    String ownerId, LockConnector lockServer, final Object lock) {
+    public Releaser(final ExtentCache extentCache, final List<String> toBeReleasedList, final List<String> freeList,
+                    final String ownerId, final LockConnector lockServer, final Object lock) {
         this.toBeReleasedList = toBeReleasedList;
         this.freeList = freeList;
         this.lockServer = lockServer;
@@ -30,25 +29,24 @@ public class Releaser extends AbstractTask {
     @SuppressWarnings({"en", "ForLoopReplaceableByForEach"})
     public void run() {
         try{
-            while (this.isRunning()) {
-                synchronized (lock) {
-                    for( int i = 0; i < toBeReleasedList.size(); i++ )
-                    {
-                        String lock = toBeReleasedList.get( i );
-                        if (freeList.contains(lock)) {
-                            freeList.remove(lock);
-                            extentCache.flush(lock);
-                            toBeReleasedList.remove(lock);
-                            lockServer.release(lock, ownerId);
-                            i--;
-                        }
+            while (this.isRunning()) synchronized (this.lock) {
+                for (int i = 0; i < this.toBeReleasedList.size(); i++) {
+                    final String lock = this.toBeReleasedList.get(i);
+                    if (this.freeList.contains(lock)) try {
+                        this.freeList.remove(lock);
+                        this.extentCache.flush(lock);
+                        this.toBeReleasedList.remove(lock);
+                        this.lockServer.release(lock, this.ownerId);
+                        i--;
+                    } catch (final RemoteException e) {
+                        e.printStackTrace();
                     }
-
-                    lock.wait();
                 }
+                this.lock.wait();
             }
-        } catch (RemoteException | InterruptedException e){
+        } catch (final InterruptedException e) {
             e.printStackTrace();
         }
+
     }
 }

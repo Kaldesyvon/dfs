@@ -1,10 +1,5 @@
 package dfs.dfsservice;
 
-import dfs.extentservice.ExtentConnector;
-import dfs.extentservice.ExtentServer;
-import dfs.lockservice.Pair;
-
-import java.io.File;
 import java.io.IOException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
@@ -17,17 +12,19 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
+import dfs.extentservice.ExtentConnector;
+
 public class ExtentCacheServer implements ExtentCache, ExtentConnector {
 
     private final Registry registry;
     private final ExtentConnector extentServer;
-    private HashMap<String, byte[]> cache = new HashMap<>();
-    private List<String> dirties = new ArrayList<>();
+    private final HashMap<String, byte[]> cache = new HashMap<>();
+    private final List<String> dirties = new ArrayList<>();
 
-    public ExtentCacheServer(int port, ExtentConnector extentServer) throws RemoteException, AlreadyBoundException {
+    public ExtentCacheServer(final int port, final ExtentConnector extentServer) throws RemoteException, AlreadyBoundException {
         this.registry = LocateRegistry.getRegistry(port);
 
-        ExtentConnector extentCacheService = (ExtentConnector) UnicastRemoteObject.exportObject(this, port);
+        final ExtentConnector extentCacheService = (ExtentConnector) UnicastRemoteObject.exportObject(this, port);
         this.registry.bind("ExtentCacheService", extentCacheService);
         this.extentServer = extentServer;
 
@@ -35,33 +32,33 @@ public class ExtentCacheServer implements ExtentCache, ExtentConnector {
     }
 
     @Override
-    public byte[] get(String fileName) throws IOException {
+    public byte[] get(final String fileName) throws IOException {
         System.out.println("extent cache get " + fileName);
         synchronized (this) {
-            if (!cache.containsKey(fileName)) {
-                cache.put(fileName, extentServer.get(fileName));
+            if (!this.cache.containsKey(fileName)) {
+                this.cache.put(fileName, this.extentServer.get(fileName));
                 System.out.println("file " + fileName + " put into cache");
             }
             System.out.println("returning " + fileName + " from cache");
-            return cache.get(fileName);
+            return this.cache.get(fileName);
         }
     }
 
     @Override
-    public boolean put(String fileName, byte[] fileData) throws IOException {
+    public boolean put(final String fileName, final byte[] fileData) throws IOException {
         synchronized (this) {
             System.out.println("putting " + fileName +" with content: " + Arrays.toString(fileData));
             this.get(fileName);
 
-            if (!cache.containsKey(fileName)) return false;
+            if (!this.cache.containsKey(fileName)) return false;
 
             if (fileData == null){
-                cache.put(fileName, null);
-                dirties.add(fileName);
+                this.cache.put(fileName, null);
+                this.dirties.add(fileName);
             }
-            if (!Arrays.equals(fileData, cache.get(fileName))){
-                cache.put(fileName, fileData);
-                dirties.add(fileName);
+            if (!Arrays.equals(fileData, this.cache.get(fileName))){
+                this.cache.put(fileName, fileData);
+                this.dirties.add(fileName);
             }
 
             return true;
@@ -70,25 +67,29 @@ public class ExtentCacheServer implements ExtentCache, ExtentConnector {
 
     @Override
     public void stop() throws NotBoundException, RemoteException {
-        registry.unbind("ExtentCacheService");
+        this.registry.unbind("ExtentCacheService");
         UnicastRemoteObject.unexportObject(this, true);
     }
 
     @Override
-    public void update(String fileName) throws IOException {
+    public void update(final String fileName) {
         synchronized (this) {
-            if (dirties.contains(fileName)) {
-                extentServer.put(fileName, cache.get(fileName));
-                dirties.remove(fileName);
+            if (this.dirties.contains(fileName)) {
+                try {
+                    this.extentServer.put(fileName, this.cache.get(fileName));
+                } catch (final IOException e) {
+                    throw new RuntimeException(e);
+                }
+                this.dirties.remove(fileName);
             }
         }
     }
 
     @Override
-    public void flush(String fileName) {
+    public void flush(final String fileName) {
         synchronized (this) {
-            cache.remove(fileName);
-            dirties.remove(fileName);
+            this.cache.remove(fileName);
+            this.dirties.remove(fileName);
         }
     }
 }

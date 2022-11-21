@@ -1,8 +1,5 @@
 package dfs.task;
 
-import dfs.dfsservice.LockCacheConnector;
-import dfs.lockservice.Pair;
-
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -10,45 +7,52 @@ import java.rmi.registry.Registry;
 import java.util.HashMap;
 import java.util.Queue;
 
+import dfs.dfsservice.LockCacheConnector;
+import dfs.lockservice.Pair;
+
 public class Retrier extends AbstractTask {
     private final HashMap<String, Queue<Pair>> revokedLocksMap;
-    private final Queue<String> toBeRetriedQueue;
+    private final Queue<String> toBeretried;
     private final Object lock;
 
-    public Retrier(HashMap<String, Queue<Pair>> toBeRetriedMap,
-                   Queue<String> toBeRetriedNameQueue, Object lock) {
+    public Retrier(final HashMap<String, Queue<Pair>> toBeRetriedMap,
+                   final Queue<String> toBeRetriedNameQueue, final Object lock) {
 
         this.revokedLocksMap = toBeRetriedMap;
-        this.toBeRetriedQueue = toBeRetriedNameQueue;
+        this.toBeretried = toBeRetriedNameQueue;
         this.lock = lock;
     }
 
     @Override
     public void run() {
-        System.out.println("Retrying");
+        System.out.println("Retrying...");
         try {
-            while (this.isRunning()) {
-                synchronized (lock) {
-                    for (String lockId : toBeRetriedQueue) {
-                        var locks = revokedLocksMap.get(lockId);
-                        while (locks.size() > 0) {
-                            var lockData = locks.remove();
+            while (this.isRunning()) synchronized (this.lock) {
+                for (final String lockId : this.toBeretried) {
+                    final Queue<Pair> locks = this.revokedLocksMap.get(lockId);
+                    while (locks.size() > 0) try {
+                        final var lockData = locks.remove();
 
-                            var parsedOwnerId = lockData.getOwnerId().split(":");
-                            Registry registry = LocateRegistry.getRegistry(
-                                    parsedOwnerId[0],
-                                    Integer.parseInt(parsedOwnerId[1]));
-                            var lcc = (LockCacheConnector) registry.lookup("LockCacheService");
-                            lcc.retry(lockId, lockData.getSequence());
-                        }
-                        revokedLocksMap.remove(lockId);
-                        toBeRetriedQueue.remove(lockId);
+                        final String[] parsedOwnerId = lockData.getOwnerId().split(":");
+                        final Registry registry = LocateRegistry.getRegistry(
+                            parsedOwnerId[0],
+                            Integer.parseInt(parsedOwnerId[1]));
+                        final LockCacheConnector lcc =
+                            (LockCacheConnector) registry.lookup("LockCacheService");
+                        lcc.retry(lockId, lockData.getSequence());
+
+
+                    } catch (final RemoteException | NotBoundException e) {
+                        e.printStackTrace();
                     }
-                    lock.wait();
+                    this.revokedLocksMap.remove(lockId);
+                    this.toBeretried.remove(lockId);
                 }
+                this.lock.wait();
             }
-        } catch (InterruptedException | RemoteException | NotBoundException e){
-            throw new RuntimeException(e);
+        } catch (final InterruptedException e){
+            System.out.println("Retrier stopped");
         }
     }
+
 }
