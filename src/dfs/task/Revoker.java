@@ -13,16 +13,16 @@ import dfs.lockservice.Pair;
 public class Revoker extends AbstractTask {
 
     private final HashMap<String, Pair> lockMap;
-    private final Queue<String> toBeRevokedQueue;
+    private final Queue<String> toBeRevoked;
     private final Object lock;
-    private final Queue<String> toBeRetriedQueue;
+    private final Queue<String> toBeRetried;
 
-    public Revoker(final HashMap<String, Pair> lockMap, final Queue<String> toBeRevokedQueue,
-                   final Queue<String> toBeRetriedNameQueue, final Object lock){
+    public Revoker(final HashMap<String, Pair> lockMap, final Queue<String> toBeRevoked,
+                   final Queue<String> toBeRetried, final Object lock){
 
-        this.toBeRetriedQueue = toBeRetriedNameQueue;
+        this.toBeRetried = toBeRetried;
         this.lockMap = lockMap;
-        this.toBeRevokedQueue = toBeRevokedQueue;
+        this.toBeRevoked = toBeRevoked;
         this.lock = lock;
     }
 
@@ -31,25 +31,28 @@ public class Revoker extends AbstractTask {
         System.out.println("Revoking");
         try {
             while (this.isRunning()) synchronized (this.lock) {
-                while (this.toBeRevokedQueue.size() > 0) try {
-                    final var lockId = this.toBeRevokedQueue.remove();
-
-                    final var parsedOwnerId = this.lockMap.get(lockId).getOwnerId().split(":");
-                    final Registry registry = LocateRegistry.getRegistry(
-                        parsedOwnerId[0],
-                        Integer.parseInt(parsedOwnerId[1]));
-                    final LockCacheConnector lcc =
-                        (LockCacheConnector) registry.lookup("LockCacheService");
-                    lcc.revoke(lockId);
-
-                    this.toBeRetriedQueue.add(lockId);
-                } catch (final RemoteException | NotBoundException e) {
-                    e.printStackTrace();
+                while (this.toBeRevoked.size() > 0) {
+                    final String lockId = this.toBeRevoked.remove();
+                    final String[] ownerId = this.lockMap.get(lockId).getOwnerId().split(":");
+                    final String host = ownerId[0];
+                    final int port = Integer.parseInt(ownerId[1]);
+                    final Registry registry = LocateRegistry.getRegistry(host, port);
+                    final LockCacheConnector lockCacheConnector = (LockCacheConnector) registry.lookup("LockCacheService");
+                    lockCacheConnector.revoke(lockId);
+                    this.toBeRetried.add(lockId);
                 }
                 this.lock.wait();
             }
-        } catch (final InterruptedException e){
+        } catch (final InterruptedException | NumberFormatException | RemoteException | NotBoundException e){
             e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        synchronized (this.lock) {
+            this.lock.notifyAll();
         }
     }
 }

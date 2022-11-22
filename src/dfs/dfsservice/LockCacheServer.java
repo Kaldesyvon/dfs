@@ -120,8 +120,8 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
 
     @Override
     public void stop() throws NotBoundException, RemoteException {
-        this.releaser.stop();
-        this.notifyAll();
+//        this.releaser.stop();
+//        this.notifyAll();
 
         this.registry.unbind("LockCacheService");
         UnicastRemoteObject.unexportObject(this, true);

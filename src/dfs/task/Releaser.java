@@ -8,17 +8,18 @@ import dfs.lockservice.LockConnector;
 
 public class Releaser extends AbstractTask {
 
-    private final List<String> freeList;
-    private final List<String> toBeReleasedList;
+    private final List<String> freeLocks;
+
+    private final List<String> toBeReleased;
     private final LockConnector lockServer;
     private final String ownerId;
     private final Object lock;
     private final ExtentCache extentCache;
 
-    public Releaser(final ExtentCache extentCache, final List<String> toBeReleasedList, final List<String> freeList,
+    public Releaser(final ExtentCache extentCache, final List<String> toBeReleased, final List<String> freeLocks,
                     final String ownerId, final LockConnector lockServer, final Object lock) {
-        this.toBeReleasedList = toBeReleasedList;
-        this.freeList = freeList;
+        this.toBeReleased = toBeReleased;
+        this.freeLocks = freeLocks;
         this.lockServer = lockServer;
         this.ownerId = ownerId;
         this.lock = lock;
@@ -26,27 +27,34 @@ public class Releaser extends AbstractTask {
     }
 
     @Override
-    @SuppressWarnings({"en", "ForLoopReplaceableByForEach"})
+    @SuppressWarnings({"en"})
     public void run() {
-        try{
+        try {
             while (this.isRunning()) synchronized (this.lock) {
-                for (int i = 0; i < this.toBeReleasedList.size(); i++) {
-                    final String lock = this.toBeReleasedList.get(i);
-                    if (this.freeList.contains(lock)) try {
-                        this.freeList.remove(lock);
+                for(int i = 0; i < this.toBeReleased.size(); i++ )
+                {
+                    final String lock = this.toBeReleased.get( i );
+                    if (this.freeLocks.contains(lock)) {
+                        this.freeLocks.remove(lock);
                         this.extentCache.flush(lock);
-                        this.toBeReleasedList.remove(lock);
+                        this.toBeReleased.remove(lock);
                         this.lockServer.release(lock, this.ownerId);
                         i--;
-                    } catch (final RemoteException e) {
-                        e.printStackTrace();
                     }
                 }
+
                 this.lock.wait();
             }
-        } catch (final InterruptedException e) {
+        } catch (final InterruptedException | RemoteException e) {
             e.printStackTrace();
         }
+    }
 
+    @Override
+    public void stop() {
+        super.stop();
+        synchronized (this.lock) {
+            this.lock.notifyAll();
+        }
     }
 }

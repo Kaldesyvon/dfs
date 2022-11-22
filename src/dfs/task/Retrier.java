@@ -12,14 +12,14 @@ import dfs.lockservice.Pair;
 
 public class Retrier extends AbstractTask {
     private final HashMap<String, Queue<Pair>> revokedLocksMap;
-    private final Queue<String> toBeretried;
+    private final Queue<String> toBeRetried;
     private final Object lock;
 
     public Retrier(final HashMap<String, Queue<Pair>> toBeRetriedMap,
                    final Queue<String> toBeRetriedNameQueue, final Object lock) {
 
         this.revokedLocksMap = toBeRetriedMap;
-        this.toBeretried = toBeRetriedNameQueue;
+        this.toBeRetried = toBeRetriedNameQueue;
         this.lock = lock;
     }
 
@@ -28,31 +28,32 @@ public class Retrier extends AbstractTask {
         System.out.println("Retrying...");
         try {
             while (this.isRunning()) synchronized (this.lock) {
-                for (final String lockId : this.toBeretried) {
+                for (final String lockId : this.toBeRetried) {
                     final Queue<Pair> locks = this.revokedLocksMap.get(lockId);
-                    while (locks.size() > 0) try {
-                        final var lockData = locks.remove();
-
-                        final String[] parsedOwnerId = lockData.getOwnerId().split(":");
-                        final Registry registry = LocateRegistry.getRegistry(
-                            parsedOwnerId[0],
-                            Integer.parseInt(parsedOwnerId[1]));
-                        final LockCacheConnector lcc =
-                            (LockCacheConnector) registry.lookup("LockCacheService");
-                        lcc.retry(lockId, lockData.getSequence());
-
-
-                    } catch (final RemoteException | NotBoundException e) {
-                        e.printStackTrace();
+                    while (locks.size() >= 1) {
+                        final Pair lock = locks.remove();
+                        final String[] ownerId = lock.getOwnerId().split(":");
+                        final String host = ownerId[0];
+                        final int port = Integer.parseInt(ownerId[1]);
+                        final Registry registry = LocateRegistry.getRegistry(host, port);
+                        final LockCacheConnector lockCacheConnector = (LockCacheConnector) registry.lookup("LockCacheService");
+                        lockCacheConnector.retry(lockId, lock.getSequence());
                     }
+                    this.toBeRetried.remove(lockId);
                     this.revokedLocksMap.remove(lockId);
-                    this.toBeretried.remove(lockId);
                 }
                 this.lock.wait();
             }
-        } catch (final InterruptedException e){
-            System.out.println("Retrier stopped");
+        } catch (final InterruptedException | RemoteException | NumberFormatException | NotBoundException e){
+            e.printStackTrace();
         }
     }
 
+    @Override
+    public void stop() {
+        super.stop();
+        synchronized (this.lock) {
+            this.lock.notifyAll();
+        }
+    }
 }

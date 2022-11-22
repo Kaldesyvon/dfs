@@ -65,11 +65,7 @@ public class ExtentCacheServer implements ExtentCache, ExtentConnector {
         }
     }
 
-    @Override
-    public void stop() throws NotBoundException, RemoteException {
-        this.registry.unbind("ExtentCacheService");
-        UnicastRemoteObject.unexportObject(this, true);
-    }
+
 
     @Override
     public void update(final String fileName) {
@@ -91,5 +87,11 @@ public class ExtentCacheServer implements ExtentCache, ExtentConnector {
             this.cache.remove(fileName);
             this.dirties.remove(fileName);
         }
+    }
+
+    @Override
+    public void stop() throws NotBoundException, RemoteException {
+        this.registry.unbind("ExtentCacheService");
+        UnicastRemoteObject.unexportObject(this, true);
     }
 }
