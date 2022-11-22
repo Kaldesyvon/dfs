@@ -1,17 +1,14 @@
 package dfs.extentservice;
 
-import java.io.IOException;
-import java.rmi.NotBoundException;
 import java.rmi.Remote;
-import java.rmi.RemoteException;
 
 public interface ExtentConnector extends Remote {
     String SERVICE_NAME = "ExtentService";
 
-    byte[] get(String fileName) throws IOException;
+    byte[] get(String fileName);
 
-    boolean put(String fileName, byte[] fileData) throws IOException;
+    boolean put(String fileName, byte[] fileData);
 
-    void stop() throws RemoteException, NotBoundException;
+    void stop();
 
 }

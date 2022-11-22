@@ -1,5 +1,6 @@
 package dfs.lockservice;
 
+import java.io.IOException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -15,29 +16,33 @@ import dfs.task.Revoker;
 
 public class LockServer implements dfs.lockservice.LockConnector {
 
-    private final Registry registry;
+    private Registry registry;
     private final HashMap<String, Pair> lockMap = new HashMap<>();
-    private final Revoker revoker;
-    private final Retrier retrier;
+    private Revoker revoker;
+    private Retrier retrier;
     private final Queue<String> toBeRevoked = new LinkedList<>();
     private final HashMap<String, Queue<Pair>> revokedLocks = new HashMap<>();
 
-    public LockServer(final int port) throws RemoteException, AlreadyBoundException {
-        this.registry = LocateRegistry.createRegistry(port);
-        final LockConnector lockServer = (LockConnector) UnicastRemoteObject.exportObject(this, port);
-        this.registry.bind("LockService", lockServer);
+    public LockServer(final int port) {
+        try {
+            this.registry = LocateRegistry.createRegistry(port);
+            final LockConnector lockServer = (LockConnector) UnicastRemoteObject.exportObject(this, port);
+            this.registry.bind("LockService", lockServer);
 
-        final Queue<String> toBeRetriedQueue = new LinkedList<>();
-        this.revoker = new Revoker(this.lockMap, this.toBeRevoked,
+            final Queue<String> toBeRetriedQueue = new LinkedList<>();
+            this.revoker = new Revoker(this.lockMap, this.toBeRevoked,
                 toBeRetriedQueue, this);
-        this.retrier = new Retrier(this.revokedLocks,
+            this.retrier = new Retrier(this.revokedLocks,
                 toBeRetriedQueue, this);
 
-        System.out.println("LockServer is running");
+            System.out.println("LockServer is running");
+        } catch (final IOException | AlreadyBoundException e){
+            e.printStackTrace();
+        }
     }
 
     @Override
-    public boolean acquire(final String lockId, final String ownerId, final long sequence) throws RemoteException {
+    public boolean acquire(final String lockId, final String ownerId, final long sequence) {
         synchronized (this) {
             if (!this.lockMap.containsKey(lockId)) {
                 this.lockMap.put(lockId, new Pair(ownerId, sequence));

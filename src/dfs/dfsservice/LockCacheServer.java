@@ -18,61 +18,55 @@ import dfs.task.Releaser;
 
 public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConnector {
 
-    private final Registry registry;
-    private final String address;
-    private final LockConnector lockServer;
-    private final Releaser releaser;
-    private final List<String> lockedList = new ArrayList<>();
+    private Registry registry;
+    private String address;
+    private LockConnector lockServer;
+    private Releaser releaser;
+    private final List<String> lockedLocks = new ArrayList<>();
     private final List<String> toBeAcquired = new ArrayList<>();
     private final List<String> toBeReleased = new ArrayList<>();
     private final List<String> freeLocks = new ArrayList<>();
     private long acquire = 0;
 
-    LockCacheServer(final int port, final ExtentCache extentCache, final LockConnector lockServer) throws IOException, AlreadyBoundException {
+    LockCacheServer(final int port, final ExtentCache extentCache, final LockConnector lockServer) {
+        try {
+            this.registry = LocateRegistry.getRegistry(port);
+            final var socket = new Socket("google.com", 80);
+            final var ip = socket.getLocalAddress().getHostAddress();
+            socket.close();
+            this.address = LockCacheServer.generateFullAddress(ip, port);
+
+            final var lockCacheService = (LockCacheConnector) UnicastRemoteObject.exportObject(this, port);
+            this.registry.bind("LockCacheService", lockCacheService);
+
+            this.lockServer = lockServer;
+
+            this.releaser = new Releaser(extentCache, this.toBeReleased, this.freeLocks,
+                this.address, lockServer, this);
+
+            System.out.println("LockCacheServer is running");
+        } catch (final IOException | AlreadyBoundException e){
+            e.printStackTrace();
+        }
 
 
-        this.registry = LocateRegistry.getRegistry(port);
-        final var socket = new Socket("google.com", 80);
-        final var ip = socket.getLocalAddress().getHostAddress();
-        socket.close();
-        this.address = LockCacheServer.generateFullAddress(ip, port);
-
-        final var lockCacheService = (LockCacheConnector) UnicastRemoteObject.exportObject(this, port);
-        this.registry.bind("LockCacheService", lockCacheService);
-
-        this.lockServer = lockServer;
-
-        this.releaser = new Releaser(extentCache, this.toBeReleased, this.freeLocks,
-            this.address, lockServer, this);
-
-        System.out.println("LockCacheServer is running");
     }
 
 
     @Override
     public void acquire(final String lockId) {
         synchronized (this) {
-            while (true) {
-                try {
-                    if (!(this.toBeAcquired.contains(lockId)
-                                        && (!this.lockedList.contains(lockId) && !this.freeLocks.contains(lockId))
-                                        || !this.lockServer.acquire(lockId, this.address, this.acquire++))) break;
-                } catch (final RemoteException | NotBoundException e) {
-                    throw new RuntimeException(e);
-                }
-
-                if (!this.toBeAcquired.contains(lockId))
-                    this.toBeAcquired.add(lockId);
-
-                try {
+            try {
+                while ((!this.freeLocks.contains(lockId) && !this.lockedLocks.contains(lockId)) && (this.toBeAcquired.contains(lockId) || !this.lockServer.acquire(lockId, this.address, this.acquire++))) {
+                    if (!this.toBeAcquired.contains(lockId)) this.toBeAcquired.add(lockId);
                     this.wait();
-                } catch (final InterruptedException e) {
-                    throw new RuntimeException(e);
                 }
+            } catch (final RemoteException | InterruptedException | NotBoundException e) {
+                e.printStackTrace();
             }
-            this.lockedList.add(lockId);
-            this.toBeAcquired.remove(lockId);
             this.freeLocks.remove(lockId);
+            this.toBeAcquired.remove(lockId);
+            this.lockedLocks.add(lockId);
         }
     }
 
@@ -81,8 +75,8 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     @Override
     public void release(final String lockId) {
         synchronized (this) {
-            if (this.lockedList.contains(lockId)){
-                this.lockedList.remove(lockId);
+            if (this.lockedLocks.contains(lockId)){
+                this.lockedLocks.remove(lockId);
                 this.freeLocks.add(lockId);
                 this.notifyAll();
             }
@@ -94,7 +88,7 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     }
 
     @Override
-    public synchronized void revoke(final String lockId) throws RemoteException {
+    public synchronized void revoke(final String lockId) {
         synchronized (this) {
             if (!this.toBeReleased.contains(lockId)) this.toBeReleased.add(lockId);
             this.releaser.start();
@@ -104,7 +98,7 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     }
 
     @Override
-    public void retry(final String lockId, final long sequence) throws RemoteException {
+    public void retry(final String lockId, final long sequence) {
         synchronized (this){
             this.toBeAcquired.remove(lockId);
             this.notifyAll();
@@ -119,11 +113,12 @@ public class LockCacheServer implements dfs.dfsservice.LockCache, LockCacheConne
     }
 
     @Override
-    public void stop() throws NotBoundException, RemoteException {
-//        this.releaser.stop();
-//        this.notifyAll();
-
-        this.registry.unbind("LockCacheService");
-        UnicastRemoteObject.unexportObject(this, true);
+    public void stop() {
+        try {
+            this.registry.unbind("LockCacheService");
+            UnicastRemoteObject.unexportObject(this, true);
+        } catch (final IOException | NotBoundException e){
+            e.printStackTrace();
+        }
     }
 }
